@@ -575,19 +575,21 @@ public:
 
     struct eventData
     {
-        int funcRef; uint32 delay; uint32 calls;
-        eventData(int _funcRef, uint32 _delay, uint32 _calls) :
-        funcRef(_funcRef), delay(_delay), calls(_calls) {}
+        int threadRef; uint32 delay; uint32 calls;
+        eventData(int _threadRef, uint32 _delay, uint32 _calls) :
+        threadRef(_threadRef), delay(_delay), calls(_calls) {}
     };
 
     typedef std::multimap<uint32, eventData> EventStore; // Not to use multimap? Can same function ref ID be used multiple times?
 
-    virtual void OnScriptEvent(int funcRef, uint32 delay, uint32 calls) { }
+    virtual void OnScriptEvent(int threadRef, uint32 delay, uint32 calls) { }
 
     static void ScriptEventsResetAll(); // Unregisters and stops all timed events
     void ScriptEventsReset();
-    void ScriptEventCancel(int funcRef);
+    void ScriptEventCancel(int threadRef);
     void ScriptEventsExecute();
+    void ScriptEventExecute(int threadRef, uint32 delay, uint32 calls, WorldObject* obj = NULL);
+    int ScriptEventCreate(lua_State* L, uint32 delay, uint32 calls);
 
     // Gets the event map saved for a guid
     static LuaEventMap* GetEvents(WorldObject* obj)
@@ -608,11 +610,6 @@ public:
     bool ScriptEventsEmpty() const
     {
         return _eventMap.empty();
-    }
-
-    void ScriptEventCreate(int funcRef, uint32 delay, uint32 calls)
-    {
-        _eventMap.insert(EventStore::value_type(_time + delay, eventData(funcRef, delay, calls)));
     }
 
     static UNORDERED_MAP<uint64, LuaEventMap*> LuaEventMaps; // Creature and gameobject timed events
@@ -700,13 +697,9 @@ public:
         }
     }
     // executed when a  timed event fires
-    void OnScriptEvent(int funcRef, uint32 delay, uint32 calls)
+    void OnScriptEvent(int threadRef, uint32 delay, uint32 calls)
     {
-        sEluna->BeginCall(funcRef);
-        sEluna->PushUnsigned(sEluna->LuaState, funcRef);
-        sEluna->PushUnsigned(sEluna->LuaState, delay);
-        sEluna->PushUnsigned(sEluna->LuaState, calls);
-        sEluna->ExecuteCall(3, 0);
+        ScriptEventExecute(threadRef, delay, calls);
     }
     void OnStartup()
     {
@@ -766,14 +759,9 @@ public:
         }
 
         // executed when a  timed event fires
-        void OnScriptEvent(int funcRef, uint32 delay, uint32 calls)
+        void OnScriptEvent(int threadRef, uint32 delay, uint32 calls)
         {
-            sEluna->BeginCall(funcRef);
-            sEluna->PushUnsigned(sEluna->LuaState, funcRef);
-            sEluna->PushUnsigned(sEluna->LuaState, delay);
-            sEluna->PushUnsigned(sEluna->LuaState, calls);
-            sEluna->PushUnit(sEluna->LuaState, me);
-            sEluna->ExecuteCall(4, 0);
+            ScriptEventExecute(threadRef, delay, calls, me);
         }
 
         //Called for reaction at enter to combat if not in combat yet (enemy can be NULL)
@@ -1214,14 +1202,9 @@ public:
         }
 
         // executed when a timed event fires
-        void OnScriptEvent(int funcRef, uint32 delay, uint32 calls)
+        void OnScriptEvent(int threadRef, uint32 delay, uint32 calls)
         {
-            sEluna->BeginCall(funcRef);
-            sEluna->PushUnsigned(sEluna->LuaState, funcRef);
-            sEluna->PushUnsigned(sEluna->LuaState, delay);
-            sEluna->PushUnsigned(sEluna->LuaState, calls);
-            sEluna->PushGO(sEluna->LuaState, go);
-            sEluna->ExecuteCall(4, 0);
+            ScriptEventExecute(threadRef, delay, calls, go);
         }
 
         void Reset()

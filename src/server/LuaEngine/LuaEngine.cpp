@@ -154,8 +154,8 @@ void Eluna::RegisterGlobals(lua_State* L)
     lua_register(L, "CharDBExecute", &LuaGlobalFunctions::CharDBExecute);                   // CharDBExecute(sql) - Executes given SQL query to character database (not instant)
     lua_register(L, "AuthDBQuery", &LuaGlobalFunctions::AuthDBQuery);                       // AuthDBQuery(sql) - Executes given SQL query to auth/logon database instantly and returns a QueryResult object
     lua_register(L, "AuthDBExecute", &LuaGlobalFunctions::AuthDBExecute);                   // AuthDBExecute(sql) - Executes given SQL query to auth/logon database (not instant)
-    lua_register(L, "CreateLuaEvent", &LuaGlobalFunctions::CreateLuaEvent);                 // CreateLuaEvent(function, delay, calls) - Creates a timed event. Returns Event ID
-    lua_register(L, "RegisterTimedEvent", &LuaGlobalFunctions::CreateLuaEvent);             // RegisterTimedEvent(function, delay, calls) - Creates a timed event. Returns Event ID
+    lua_register(L, "CreateLuaEvent", &LuaGlobalFunctions::CreateLuaEvent);                 // CreateLuaEvent(function, delay, calls, ...) - Creates a timed event. Returns Event ID
+    lua_register(L, "RegisterTimedEvent", &LuaGlobalFunctions::CreateLuaEvent);             // RegisterTimedEvent(function, delay, calls, ...) - Creates a timed event. Returns Event ID
     lua_register(L, "DestroyEventByID", &LuaGlobalFunctions::DestroyEventByID);             // DestroyEventByID(eventId) - Removes a global timed event by it's ID
     lua_register(L, "DestroyEvents", &LuaGlobalFunctions::DestroyEvents);                   // DestroyEvents([allEvents]) - Removes all global timed events. Removes all timed events (creature and gameobject) if allEvents is true
     lua_register(L, "PerformIngameSpawn", &LuaGlobalFunctions::PerformIngameSpawn);         // PerformIngameSpawn(spawntype, entry, mapid, x, y, z, o[, save, DurOrResptime, phase]) - spawntype: 1 Creature, 2 Object. DurOrResptime is respawntime for gameobjects and despawntime for creatures if creature is not saved. Returns spawned creature/gameobject
@@ -698,21 +698,21 @@ void Eluna::LuaEventMap::ScriptEventsReset()
         return;
     for (EventStore::iterator itr = _eventMap.begin(); itr != _eventMap.end();)
     {
-        luaL_unref(sEluna->LuaState, LUA_REGISTRYINDEX, itr->second.funcRef);
+        luaL_unref(sEluna->LuaState, LUA_REGISTRYINDEX, itr->second.threadRef);
         ++itr;
     }
     _eventMap.clear();
 }
-void Eluna::LuaEventMap::ScriptEventCancel(int funcRef)
+void Eluna::LuaEventMap::ScriptEventCancel(int threadRef)
 {
     if (ScriptEventsEmpty())
         return;
 
     for (EventStore::iterator itr = _eventMap.begin(); itr != _eventMap.end();)
     {
-        if (funcRef == itr->second.funcRef)
+        if (threadRef == itr->second.threadRef)
         {
-            luaL_unref(sEluna->LuaState, LUA_REGISTRYINDEX, itr->second.funcRef);
+            luaL_unref(sEluna->LuaState, LUA_REGISTRYINDEX, itr->second.threadRef);
             _eventMap.erase(itr++);
         }
         else
@@ -732,7 +732,7 @@ void Eluna::LuaEventMap::ScriptEventsExecute()
             continue;
         }
 
-        OnScriptEvent(itr->second.funcRef, itr->second.delay, itr->second.calls);
+        OnScriptEvent(itr->second.threadRef, itr->second.delay, itr->second.calls);
 
         if (itr->second.calls != 1)
         {
@@ -741,7 +741,52 @@ void Eluna::LuaEventMap::ScriptEventsExecute()
             _eventMap.insert(EventStore::value_type(_time + itr->second.delay, itr->second));
         }
         else
-            luaL_unref(sEluna->LuaState, LUA_REGISTRYINDEX, itr->second.funcRef);
+            luaL_unref(sEluna->LuaState, LUA_REGISTRYINDEX, itr->second.threadRef);
         _eventMap.erase(itr++);
     }
+}
+void Eluna::LuaEventMap::ScriptEventExecute(int threadRef, uint32 delay, uint32 calls, WorldObject* obj)
+{
+    sEluna->BeginCall(threadRef); // thread (function should be first!)
+    lua_State* thread = lua_tothread(sEluna->LuaState, 1); // function, ...
+    if (!thread) // something is off
+        return;
+    lua_settop(sEluna->LuaState, 0); // empty
+    sEluna->PushUnsigned(sEluna->LuaState, threadRef);
+    sEluna->PushUnsigned(sEluna->LuaState, delay);
+    sEluna->PushUnsigned(sEluna->LuaState, calls);
+    if (obj)
+    {
+        if(Creature* creature = obj->ToCreature())
+            sEluna->PushUnit(sEluna->LuaState, creature);
+        else if(GameObject* go = obj->ToGameObject())
+            sEluna->PushGO(sEluna->LuaState, go);
+        else
+            lua_pushnil(sEluna->LuaState);
+    }
+    int values = lua_gettop(thread);
+    for (int i = 1; i <= values; ++i)
+        lua_pushvalue(thread, i); // repush all values for xmove
+    if (values > 1)
+        lua_xmove(thread, sEluna->LuaState, values-1); // ref, delay, calls, ...
+    lua_xmove(thread, sEluna->LuaState, 1); // ref, delay, calls, ..., function
+    lua_insert(sEluna->LuaState, 1); // function, ref, delay, calls, ...
+    sEluna->ExecuteCall(lua_gettop(sEluna->LuaState)-1, 0);
+}
+int Eluna::LuaEventMap::ScriptEventCreate(lua_State* L, uint32 delay, uint32 calls)
+{
+    // function, delay, repeats, ...
+    lua_remove(L, 2);
+    // function, repeats, ...
+    lua_remove(L, 2);
+    // function, ...
+    lua_State* thread = lua_newthread(L); // nothing? Sould be: function, ...
+    // function, ..., thread
+    lua_insert(L, 1);
+    // thread, function, ...
+    lua_xmove(L, thread, lua_gettop(L)-1); // function, ... (fix nothing^)
+    // thread
+    int threadRef = lua_ref(L, true);
+    _eventMap.insert(EventStore::value_type(_time + delay, eventData(threadRef, delay, calls)));
+    return threadRef;
 }

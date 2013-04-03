@@ -4994,7 +4994,7 @@ public:
         return 0;
     }
 
-    // RegisterEvent(function, delay, calls)
+    // RegisterEvent(function, delay, calls, ...)
     static int RegisterEvent(lua_State* L, Unit* unit)
     {
         TO_CREATURE();
@@ -5008,12 +5008,7 @@ public:
             return 0;
         }
         if (!strcmp(luaL_typename(L, 1), "function") || delay > 0)
-        {
-            lua_settop(L, 1);
-            int functionRef = lua_ref(L, true);
-            eventMap->ScriptEventCreate(functionRef, delay, repeats);
-            sEluna->PushInteger(L, functionRef);
-        }
+            sEluna->PushInteger(L, eventMap->ScriptEventCreate(L, delay, repeats));
         else
             return 0;
         return 1;

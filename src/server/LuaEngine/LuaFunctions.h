@@ -310,7 +310,7 @@ ElunaRegister<Unit> UnitMethods[] =
     {"IsDamageEnoughForLootingAndReward", &LuaUnit::IsDamageEnoughForLootingAndReward}, // :IsDamageEnoughForLootingAndReward() --
 
     // Other
-    {"RegisterEvent", &LuaUnit::RegisterEvent},                     // :RegisterEvent(function, delay, calls)
+    {"RegisterEvent", &LuaUnit::RegisterEvent},                     // :RegisterEvent(function, delay, calls, ...)
     {"RemoveEventById", &LuaUnit::RemoveEventById},                 // :RemoveEventById(eventID)
     {"RemoveEvents", &LuaUnit::RemoveEvents},                       // :RemoveEvents()
     {"Despawn", &LuaUnit::Despawn},                                 // :Despawn([despawnDelay]) - Creature despawns after given time
@@ -525,7 +525,7 @@ ElunaRegister<GameObject> GameObjectMethods[] =
     {"CastSpellOnTarget", &LuaGameObject::CastSpellOnTarget},       // :CastSpellOnTarget(target, spellId) - Casts the spell on target, no manacost or cast time -
     {"Move", &LuaGameObject::Move},                                 // :Move(x, y, z, o) - Moves the GO to coordinates -
     {"SpawnCreature", &LuaGameObject::SummonCreature},              // :SummonCreature(entry, x, y, z, o, despawntime) Summons a temporary creature. 0 for infinitely, otherwise despawns after despawntime (ms) -
-    {"RegisterEvent", &LuaGameObject::RegisterEvent},               // :RegisterEvent(function, delay, calls) -
+    {"RegisterEvent", &LuaGameObject::RegisterEvent},               // :RegisterEvent(function, delay, calls, ...) -
     {"RemoveEventById", &LuaGameObject::RemoveEventById},           // :RemoveEventById(eventID) -
     {"RemoveEvents", &LuaGameObject::RemoveEvents},                 // :RemoveEvents() -
     {"Despawn", &LuaGameObject::Despawn},                           // :Despawn() - Object despawns

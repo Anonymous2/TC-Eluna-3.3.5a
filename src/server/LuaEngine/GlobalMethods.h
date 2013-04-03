@@ -435,18 +435,13 @@ namespace LuaGlobalFunctions
         return 1;
     }
 
-    // CreateLuaEvent(function, delay, calls) - Creates a timed event. Calls set to 0 will call inf returns eventID.
+    // CreateLuaEvent(function, delay, calls, ...) - Creates a timed event. Calls set to 0 will call inf returns eventID.
     static int CreateLuaEvent(lua_State* L)
     {
         uint32 delay = luaL_checkunsigned(L, 2);
         uint32 repeats = luaL_checkunsigned(L, 3);
         if (!strcmp(luaL_typename(L, 1), "function") || delay > 0)
-        {
-            lua_settop(L, 1);
-            int functionRef = lua_ref(L, true);
-            sEluna->LuaWorldAI->ScriptEventCreate(functionRef, delay, repeats);
-            sEluna->PushInteger(L, functionRef);
-        }
+            sEluna->PushInteger(L, sEluna->LuaWorldAI->ScriptEventCreate(L, delay, repeats));
         else
             return 0;
         return 1;
@@ -455,8 +450,8 @@ namespace LuaGlobalFunctions
     // DestroyEventByID(eventID) - removes all global lua events with eventid
     static int DestroyEventByID(lua_State* L)
     {
-        int functionRef = luaL_checkinteger(L, 1);
-        sEluna->LuaWorldAI->ScriptEventCancel(functionRef);
+        int threadRef = luaL_checkinteger(L, 1);
+        sEluna->LuaWorldAI->ScriptEventCancel(threadRef);
         return 0;
     }
 
